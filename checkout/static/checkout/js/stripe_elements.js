@@ -60,7 +60,7 @@ form.addEventListener('submit', function(ev) {
             card: card,
         }
 
-    // then get a promise object ( given the name "result" here), check if it has an error
+    // then get a promise object (given the name "result" here), check if it has an error
     }).then(function(result) {
         if (result.error) {
             var errorDiv = document.getElementById('card-errors');
