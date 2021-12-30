@@ -48,18 +48,16 @@ var form = document.getElementById('payment-form');
 
 // event listener for card submission
 form.addEventListener('submit', function(ev) {
-
     ev.preventDefault(); // prevent POST
     card.update({ 'disabled': true});
-
     $('#submit-button').attr('disabled', true);
-
+    $('#payment-form').fadeToggle(100);
+    $('#loading-overlay').fadeToggle(100);
     // confirm the card payment by providing the card to stripe
     stripe.confirmCardPayment(clientSecret, {
         payment_method: {
             card: card,
         }
-
     // then get a promise object (given the name "result" here), check if it has an error
     }).then(function(result) {
         if (result.error) {
@@ -70,11 +68,11 @@ form.addEventListener('submit', function(ev) {
                 </span>
                 <span>${result.error.message}</span>`;
             $(errorDiv).html(html);
-
+            $('#payment-form').fadeToggle(100);
+            $('#loading-overlay').fadeToggle(100);
             // give control back to user
             card.update({'disabled': false});
             $('#submit-button').attr('disabled', false);
-            
         } else { // else if the promise object has a success handler
             if (result.paymentIntent.status === 'succeeded') {
                 form.submit();
