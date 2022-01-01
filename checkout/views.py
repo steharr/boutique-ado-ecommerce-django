@@ -2,6 +2,8 @@ from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse
 from django.contrib import messages
 from django.conf import settings
+from django.views.decorators.http import require_POST
+from django.http import HttpResponse
 
 from .forms import OrderForm
 from .models import Order, OrderLineItem
@@ -9,6 +11,32 @@ from products.models import Product
 from bag.contexts import bag_contents
 
 import stripe
+import json
+
+
+@require_POST
+def cache_checkout_data(request):
+    try:
+        # give this view the client secret from the payment intent
+        # split at word secret so that first part is payment intent id
+        pid = request.POST.get('client_secret').split('_secret')[0]
+        stripe.api_key = settings.STRIPE_SECRET_KEY
+        stripe.PaymentIntent.modify(pid,
+                                    metadata={
+                                        'bag':
+                                        json.dumps(
+                                            request.session.get('bag', {})),
+                                        'save_info':
+                                        request.POST.get('save_info'),
+                                        'username':
+                                        request.user,
+                                    })
+    except Exception as e:
+        messages.error(
+            request, 'Sorry, your payment cannot be  \
+                processed right now, Please try again later.')
+        return HttpResponse(content=e, status=400)
+    return HttpResponse(status=200)
 
 
 def checkout(request):
@@ -16,6 +44,7 @@ def checkout(request):
     stripe_secret_key = settings.STRIPE_SECRET_KEY
 
     if request.method == 'POST':
+        # add the data into a dictionary to be sent to db
         bag = request.session.get('bag', {})
         form_data = {
             'full_name': request.POST['full_name'],
@@ -69,7 +98,11 @@ def checkout(request):
             messages.error(
                 request, 'There is an error with your form \
                 Please double check your information')
+
     else:
+        # if theres no data being posted to db yet,
+        # this block sets up vars for rendering the checkout template
+        # it also creates a stripe payment intent object (on stripe's servers) -> identified by a secret key
         bag = request.session.get('bag', {})
         if not bag:
             messages.error(request,
@@ -80,6 +113,10 @@ def checkout(request):
         total = current_bag['grand_total']
         stripe_total = round(total * 100)
         stripe.api_key = stripe_secret_key
+
+        # intent created here - stripe creates a unique client secret
+        # which is returned as part of the intent object
+        # that client secret is important for later
         intent = stripe.PaymentIntent.create(amount=stripe_total,
                                              currency=settings.STRIPE_CURRENCY)
         order_form = OrderForm()

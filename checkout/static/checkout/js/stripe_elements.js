@@ -48,35 +48,94 @@ var form = document.getElementById('payment-form');
 
 // event listener for card submission
 form.addEventListener('submit', function(ev) {
-    ev.preventDefault(); // prevent POST
+    // prevent POST, prevent form from submitting to db
+    ev.preventDefault(); 
+
+    // disable user interation and add loading feedback
     card.update({ 'disabled': true});
     $('#submit-button').attr('disabled', true);
     $('#payment-form').fadeToggle(100);
     $('#loading-overlay').fadeToggle(100);
-    // confirm the card payment by providing the card to stripe
-    stripe.confirmCardPayment(clientSecret, {
-        payment_method: {
-            card: card,
-        }
-    // then get a promise object (given the name "result" here), check if it has an error
-    }).then(function(result) {
-        if (result.error) {
-            var errorDiv = document.getElementById('card-errors');
-            var html = `
-                <span class="icon" role="alert">
-                <i class="fas fa-times"></i>
-                </span>
-                <span>${result.error.message}</span>`;
-            $(errorDiv).html(html);
-            $('#payment-form').fadeToggle(100);
-            $('#loading-overlay').fadeToggle(100);
-            // give control back to user
-            card.update({'disabled': false});
-            $('#submit-button').attr('disabled', false);
-        } else { // else if the promise object has a success handler
-            if (result.paymentIntent.status === 'succeeded') {
-                form.submit();
+
+    // capture the form data that cant be put into a paymentintent 
+    var saveInfo = Boolean($('#id-save-info').attr('checked'));
+    var csrfToken = $('input[name="csrfmiddlewaretoken"]').val();
+
+    // create an object to pass all information to stripe
+    var postData = {
+        'csrfmiddlewaretoken': csrfToken,
+        'client_secret': clientSecret,
+        'save_info': saveInfo,
+    }
+
+    // create a variable for the new url
+    var url = '/checkout/cache_checkout_data/';
+
+    // post this data to the cache data view
+    // the cache data view, adds the data to the paymentintent, ret 200
+    // when 200 is returned, (i.e. done)
+    // callback function to send data to stripe is executed
+    $.post(url, postData).done(function(){
+
+
+        // confirm the card payment by providing the card to stripe
+        stripe.confirmCardPayment(clientSecret, {
+            payment_method: {
+                card: card,
+                billing_details: {
+                    name: $.trim(form.full_name.value),
+                    phone:$.trim(form.phone_number.value),
+                    email:$.trim(form.email.value),
+                    address:{
+                        line1:$.trim(form.street_address1.value),
+                        line2:$.trim(form.street_address2.value),
+                        city:$.trim(form.town_or_city.value),
+                        country:$.trim(form.country.value),
+                        state:$.trim(form.county.value),
+                    },
+                }
+            },
+            shipping: {
+                name: $.trim(form.full_name.value),
+                phone: $.trim(form.phone_number.value),
+                address: {
+                    line1: $.trim(form.street_address1.value),
+                    line2: $.trim(form.street_address2.value),
+                    city: $.trim(form.town_or_city.value),
+                    country: $.trim(form.country.value),
+                    postal_code: $.trim(form.postcode.value),
+                    state: $.trim(form.county.value),
+                }
             }
-        }
+        // then get a promise object (given the name "result" here), check if it has an error
+        }).then(function(result) {
+            if (result.error) {
+                var errorDiv = document.getElementById('card-errors');
+                var html = `
+                    <span class="icon" role="alert">
+                    <i class="fas fa-times"></i>
+                    </span>
+                    <span>${result.error.message}</span>`;
+                $(errorDiv).html(html);
+                $('#payment-form').fadeToggle(100);
+                $('#loading-overlay').fadeToggle(100);
+                // give control back to user
+                card.update({'disabled': false});
+                $('#submit-button').attr('disabled', false);
+            } else { // else if the promise object has a success handler
+                if (result.paymentIntent.status === 'succeeded') {
+                    form.submit();
+                }
+            }
+        });
+
+
+    }).fail(function() {
+
+        // just reload the page, the error will be in django messages
+        location.reload();
+    
     });
+
+
 });
