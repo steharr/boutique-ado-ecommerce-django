@@ -59,8 +59,20 @@ def checkout(request):
         }
         order_form = OrderForm(form_data)
         if order_form.is_valid():
-            # validate form so save it to db and
-            order = order_form.save()
+
+            # validated form so can save it to db and
+            # commit = false, create the instance but dont commit to db yet
+            order = order_form.save(commit=False)
+
+            # get the payment intent id to add to entry in db
+            pid = request.POST.get('client_secret').split('_secret')[0]
+            order.stripe_pid = pid
+            # get the original bag to add to entry in db
+            order.original_bag = json.dumps(bag)
+
+            # save and commit order to db
+            order.save()
+
             # iterate through bag items to create each line item
             for item_id, item_data in bag.items():
                 try:
